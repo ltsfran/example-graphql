@@ -1,42 +1,14 @@
 import { ApolloServer } from '@apollo/server'
 import { startStandaloneServer } from '@apollo/server/standalone'
-
-const users = [
-  {
-    id: 1,
-    name: 'Leanne Graham',
-    username: 'Bret',
-    email: 'Sincere@april.biz',
-    street: 'Kulas Light',
-    phone: '1-770-736-8031 x56442',
-    website: 'hildegard.org'
-  },
-  {
-    id: 2,
-    name: 'Ervin Howell',
-    username: 'Antonette',
-    email: 'Shanna@melissa.tv',
-    street: 'Kulas Light'
-  },
-  {
-    id: 3,
-    name: 'Clementine Bauch',
-    username: 'Samantha',
-    email: 'Nathan@yesenia.net',
-    street: 'Kulas Light'
-  },
-  {
-    id: 4,
-    name: 'Patricia Lebsack',
-    username: 'Karianne',
-    email: 'Julianne.OConner@kory.org',
-    street: 'Kulas Light',
-    phone: '493-170-9623 x156',
-    website: 'kale.biz'
-  }
-]
+import axios from 'axios'
+import { GraphQLError } from 'graphql'
 
 const typeDefs = `#graphql
+  enum YesNo {
+    YES
+    NO
+  }
+
   type Address {
     street: String!
   }
@@ -55,7 +27,7 @@ const typeDefs = `#graphql
   type Query {
     userCount: Int!
     users(limit: Int!): [User]!
-    allUsers: [User]!
+    allUsers(phone: YesNo): [User]!
     findUser(name: String!): User
   }
 
@@ -66,26 +38,67 @@ const typeDefs = `#graphql
       email: String!
       street: String!
     ): User
+    editNumber(
+      name: String!
+      phone: String!
+    ): User
   }
 `
 
 const resolvers = {
   Query: {
-    userCount: () => users.length,
-    users: (root, args) => {
-      const { limit } = args
-      return users.filter((user, index) => index < limit)
+    userCount: async () => {
+      const { data: usersData } = await axios.get('http://localhost:3000/users')
+      return usersData.length
     },
-    allUsers: () => users,
-    findUser: (root, args) => {
+    users: async (root, args) => {
+      const { limit } = args
+      const { data: usersData } = await axios.get('http://localhost:3000/users')
+      return usersData.filter((user, index) => index < limit)
+    },
+    allUsers: async (root, args) => {
+      try {
+        const { data: usersData } = await axios.get('http://localhost:3000/users')
+        if (!args.phone) return usersData
+        const byPhone = user => args.phone === 'YES' ? user.phone : !user.phone
+        return usersData.filter(byPhone)
+      } catch (error) {
+        throw new GraphQLError('Parameter error in the service.', {
+          extensions: {
+            code: 'BAD_REQUEST',
+            response: error.code
+          }
+        })
+      }
+    },
+    findUser: async (root, args) => {
       const { name } = args
-      return users.find(user => user.name === name)
+      const { data: usersData } = await axios.get('http://localhost:3000/users')
+      return usersData.find(user => user.name === name)
     }
   },
   Mutation: {
-    addUser: (root, args) => {
-      const user = { ...args, id: users.length + 1 }
+    addUser: async (root, args) => {
+      const { data: usersData } = await axios.get('http://localhost:3000/users')
+      if (usersData.find(user => user.name === args.name)) {
+        throw new GraphQLError('Name must be unique', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            invalidArgs: args.name
+          }
+        })
+      }
+      const user = { ...args, id: usersData.length + 1 }
       return user
+    },
+    editNumber: async (root, args) => {
+      const { data: usersData } = await axios.get('http://localhost:3000/users')
+      const userIndex = usersData.findIndex(user => user.name === args.name)
+      if (userIndex === -1) return null
+      const user = usersData[userIndex]
+      const updatedUser = { ...user, phone: args.phone }
+      usersData[userIndex] = updatedUser
+      return updatedUser
     }
   },
   User: {
