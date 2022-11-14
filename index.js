@@ -3,7 +3,31 @@ import { startStandaloneServer } from '@apollo/server/standalone'
 import axios from 'axios'
 import { GraphQLError } from 'graphql'
 
+const menuPaths = [
+  {
+    title: 'Mi Perfil',
+    pathName: '/gestion/perfil',
+    icon: 'user'
+  },
+  {
+    title: 'Mis avisos',
+    pathName: '/gestion/avisos-activos',
+    icon: 'car'
+  },
+  {
+    title: 'Cerrar Sesión',
+    pathName: '/cuenta/logout',
+    icon: 'logout'
+  }
+]
+
 const typeDefs = `#graphql
+  type Menu {
+    title: String!
+    pathName: String!
+    icon: String!
+  }
+
   enum YesNo {
     YES
     NO
@@ -29,6 +53,7 @@ const typeDefs = `#graphql
     users(limit: Int!): [User]!
     allUsers(phone: YesNo): [User]!
     findUser(name: String!): User
+    menuPaths: [Menu]!
   }
 
   type Mutation {
@@ -47,6 +72,7 @@ const typeDefs = `#graphql
 
 const resolvers = {
   Query: {
+    menuPaths: () => menuPaths,
     userCount: async () => {
       const { data: usersData } = await axios.get('http://localhost:3000/users')
       return usersData.length
